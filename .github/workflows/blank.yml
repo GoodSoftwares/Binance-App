@@ -1,0 +1,87 @@
+name: BNApp64
+
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download APK
+        run: |
+          mkdir -p download
+          curl -L -o download/app.apk "https://download.binance.com/pack/BNApp64.apk"
+          
+      - name: Calculate SHA256 hash
+        id: hash
+        run: |
+          NEW_HASH=$(sha256sum download/app.apk | awk '{print $1}')
+          echo "new_hash=$NEW_HASH" >> $GITHUB_OUTPUT
+          echo "New hash: $NEW_HASH"
+
+      - name: Read last hash (if exists)
+        id: last_hash
+        run: |
+          if [ -f last_hash.txt ]; then
+            LAST_HASH=$(cat last_hash.txt)
+          else
+            LAST_HASH=""
+          fi
+          echo "last_hash=$LAST_HASH" >> $GITHUB_OUTPUT
+          echo "Last hash: $LAST_HASH"
+
+      - name: Compare hashes
+        id: compare
+        run: |
+          if [ "${{ steps.hash.outputs.new_hash }}" == "${{ steps.last_hash.outputs.last_hash }}" ]; then
+            echo "No update detected. Exiting."
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Update detected. Will create a new release."
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract APK version
+        id: version
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          VERSION_NAME=$(aapt dump badging download/app.apk | grep "versionName" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+          if [ -z "$VERSION_NAME" ]; then
+            echo "Warning: Unable to extract version number, use timestamp as tag"
+            VERSION_NAME="unknown-$(date +%Y%m%d%H%M%S)"
+          fi
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION_NAME"
+
+      - name: Create Release and upload APK
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+        run: |
+          TAG="v${VERSION_NAME}"
+          # If the tag already exists, delete the old release and tag first
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" download/app.apk \
+            --title "v${VERSION_NAME}" \
+            --notes "version: ${VERSION_NAME}" \
+            --latest
+
+      - name: Update last hash file
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          echo "${{ steps.hash.outputs.new_hash }}" > last_hash.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add last_hash.txt
+          git commit -m "Update last hash to ${{ steps.hash.outputs.new_hash }}"
+          git push
