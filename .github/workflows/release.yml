@@ -101,13 +101,16 @@ jobs:
             LATEST_DATE=$(echo "$LATEST_LINE" | cut -d, -f3)
             LATEST_TAG=$(echo "$LATEST_LINE" | cut -d, -f4)
 
+            GITHUB_DOWNLOAD_URL=https://github.com/${REPO}/releases/download/${LATEST_TAG}/app.apk
+
             echo "- **Version**: ${LATEST_VERSION}"
             echo "- **Date**: ${LATEST_DATE}"
             echo "- **SHA256**: \`${LATEST_HASH}\`"
-            echo "- **Download**: https://github.com/${REPO}/releases/download/${LATEST_TAG}/app.apk"
+            echo "- **Download**: [Github](${GITHUB_DOWNLOAD_URL}) [gh-proxy](https://gh-proxy.org/${GITHUB_DOWNLOAD_URL}) [axisnow](https://axisnow.gh-proxy.org/${GITHUB_DOWNLOAD_URL})"
             echo ""
             echo "\`\`\`bash"
             echo "# check SHA256 of the downloaded APK"
+            echo "wget -O app.apk ${GITHUB_DOWNLOAD_URL}"
             echo "echo \"${LATEST_HASH}  app.apk\" | sha256sum -c"
             echo "\`\`\`"
             echo ""
@@ -117,7 +120,8 @@ jobs:
             echo "|---------|--------|-------------|----------|"
 
             tail -n +2 "$HISTORY" | tac | while IFS=',' read -r ver sha date tag; do
-              echo "| ${ver} | \`${sha}\` | ${date} | https://github.com/${REPO}/releases/download/${tag}/app.apk |"
+              URL="https://github.com/${REPO}/releases/download/${tag}/app.apk"
+              echo "| ${ver} | \`${sha}\` | ${date} | [Github](${URL}) [gh-proxy](https://gh-proxy.org/${URL}) [axisnow](https://axisnow.gh-proxy.org/${URL}) |"
             done
           } > docs/index.md
 
