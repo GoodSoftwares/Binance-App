@@ -1,6 +1,9 @@
 name: BNApp64
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     - cron: '0 12 * * *'
   workflow_dispatch:
@@ -85,9 +88,6 @@ jobs:
           fi
 
           echo "${VERSION_NAME},${NEW_HASH},${DATE},${TAG}" >> "$HISTORY"
-          
-          echo "===== history.csv ====="
-          cat "$HISTORY"
 
           LATEST_LINE=$(tail -n 1 "$HISTORY")
 
@@ -106,13 +106,15 @@ jobs:
             echo "- **Version**: ${LATEST_VERSION}"
             echo "- **Date**: ${LATEST_DATE}"
             echo "- **SHA256**: \`${LATEST_HASH}\`"
-            echo "- **Download**: [Github](${GITHUB_DOWNLOAD_URL}) [gh-proxy](https://gh-proxy.org/${GITHUB_DOWNLOAD_URL}) [axisnow](https://axisnow.gh-proxy.org/${GITHUB_DOWNLOAD_URL})"
+            echo "- **Download**:"
+            echo "  - Github: [${GITHUB_DOWNLOAD_URL}](${GITHUB_DOWNLOAD_URL})"
+            echo "  - Mirror 1 (gh-proxy): [https://gh-proxy.org/${GITHUB_DOWNLOAD_URL}](https://gh-proxy.org/${GITHUB_DOWNLOAD_URL})"
+            echo "  - Mirror 2 (axisnow): [https://axisnow.gh-proxy.org/${GITHUB_DOWNLOAD_URL}](https://axisnow.gh-proxy.org/${GITHUB_DOWNLOAD_URL})"
             echo ""
-            echo "\`\`\`bash"
-            echo "# check SHA256 of the downloaded APK"
-            echo "wget -O app.apk ${GITHUB_DOWNLOAD_URL}"
-            echo "echo \"${LATEST_HASH}  app.apk\" | sha256sum -c"
-            echo "\`\`\`"
+            echo "> [!WARNING]"
+            echo "> **Always check the SHA256 before installing.**"
+            echo "> "
+            echo "> If it does **NOT** match, **DO NOT INSTALL** — the file may be broken or changed by someone, which can steal your money or data."
             echo ""
             echo "## Version History"
             echo ""
@@ -121,12 +123,9 @@ jobs:
 
             tail -n +2 "$HISTORY" | tac | while IFS=',' read -r ver sha date tag; do
               URL="https://github.com/${REPO}/releases/download/${tag}/app.apk"
-              echo "| ${ver} | \`${sha}\` | ${date} | [Github](${URL}) [gh-proxy](https://gh-proxy.org/${URL}) [axisnow](https://axisnow.gh-proxy.org/${URL}) |"
+              echo "| ${ver} | \`${sha}\` | ${date} | [Github](${URL}) <br> [Mirror 1 (gh-proxy)](https://gh-proxy.org/${URL}) <br> [Mirror 2 (axisnow)](https://axisnow.gh-proxy.org/${URL}) |"
             done
           } > docs/index.md
-
-          echo "===== docs/index.md ====="
-          cat docs/index.md
 
 
       - name: Update last hash file and commit docs
