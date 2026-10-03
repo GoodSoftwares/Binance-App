@@ -20,7 +20,7 @@ jobs:
         run: |
           mkdir -p download
           curl -L -o download/app.apk "https://download.binance.com/pack/BNApp64.apk"
-          
+
       - name: Calculate SHA256 hash
         id: hash
         run: |
@@ -67,6 +67,74 @@ jobs:
           echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "Version: $VERSION_NAME"
 
+      - name: Update history.csv and Generate docs/index.md
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          NEW_HASH: ${{ steps.hash.outputs.new_hash }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          mkdir -p docs
+          HISTORY=history.csv
+          DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          TAG="v${VERSION_NAME}"
+
+          if [ ! -f "$HISTORY" ]; then
+            echo "version,sha256,date,tag" > "$HISTORY"
+          fi
+
+          echo "${VERSION_NAME},${NEW_HASH},${DATE},${TAG}" >> "$HISTORY"
+          
+          echo "===== history.csv ====="
+          cat "$HISTORY"
+
+          LATEST_LINE=$(tail -n 1 "$HISTORY")
+
+          {
+            echo "# Binance APK"
+            echo ""
+            echo "## Latest"
+            echo ""
+            LATEST_VERSION=$(echo "$LATEST_LINE" | cut -d, -f1)
+            LATEST_HASH=$(echo "$LATEST_LINE" | cut -d, -f2)
+            LATEST_DATE=$(echo "$LATEST_LINE" | cut -d, -f3)
+            LATEST_TAG=$(echo "$LATEST_LINE" | cut -d, -f4)
+
+            echo "- **Version**: ${LATEST_VERSION}"
+            echo "- **Date**: ${LATEST_DATE}"
+            echo "- **SHA256**: \`${LATEST_HASH}\`"
+            echo "- **Download**: https://github.com/${REPO}/releases/download/${LATEST_TAG}/app.apk"
+            echo ""
+            echo "\`\`\`bash"
+            echo "# check SHA256 of the downloaded APK"
+            echo "echo \"${LATEST_HASH}  app.apk\" | sha256sum -c"
+            echo "\`\`\`"
+            echo ""
+            echo "## Version History"
+            echo ""
+            echo "| Version | SHA256 | Update Time | Download |"
+            echo "|---------|--------|-------------|----------|"
+
+            tail -n +2 "$HISTORY" | tac | while IFS=',' read -r ver sha date tag; do
+              echo "| ${ver} | \`${sha}\` | ${date} | https://github.com/${REPO}/releases/download/${tag}/app.apk |"
+            done
+          } > docs/index.md
+
+          echo "===== docs/index.md ====="
+          cat docs/index.md
+
+
+      - name: Update last hash file and commit docs
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          echo "${{ steps.hash.outputs.new_hash }}" > last_hash.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add last_hash.txt history.csv docs/index.md
+          git commit -m "Update last hash to ${{ steps.hash.outputs.new_hash }}"
+          git push
+
       - name: Create Release and upload APK
         if: steps.compare.outputs.changed == 'true'
         env:
@@ -80,13 +148,3 @@ jobs:
             --title "v${VERSION_NAME}" \
             --notes "version: ${VERSION_NAME}" \
             --latest
-
-      - name: Update last hash file
-        if: steps.compare.outputs.changed == 'true'
-        run: |
-          echo "${{ steps.hash.outputs.new_hash }}" > last_hash.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add last_hash.txt
-          git commit -m "Update last hash to ${{ steps.hash.outputs.new_hash }}"
-          git push
